@@ -94,6 +94,34 @@
             padding: 40px;
             font-size: 16px;
         }
+
+        .video-card {
+            /* Add this line to your existing .video-card class so we can position the delete button inside it */
+            position: relative; 
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 0, 0, 0.1);
+            color: #d32f2f;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .delete-btn:hover {
+            background: #d32f2f;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -157,6 +185,75 @@
         });
     } else {
         document.getElementById('video-list').innerHTML = '<div class="empty-state">API Key required to view history.</div>';
+    }
+
+
+    // We attach this to the window object so the inline onclick button can find it
+    window.deleteVideo = async function(videoId) {
+        if (!confirm("Remove this video from your history?")) return;
+
+        try {
+            const response = await fetch(`/api/progress/${videoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': secretKey }
+            });
+
+            if (response.ok) {
+                // If successful, instantly remove the card from the screen without refreshing
+                const card = document.getElementById(`card-${videoId}`);
+                if (card) card.remove();
+                
+                // If that was the last video, show the empty state
+                const list = document.getElementById('video-list');
+                if (list.children.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+                }
+            } else {
+                alert("Failed to delete video. Please try again.");
+            }
+        } catch (err) {
+            console.error("Error deleting:", err);
+            alert("Network error while trying to delete.");
+        }
+    };
+
+    // Your existing fetch history logic...
+    if (secretKey) {
+        fetch('/api/history', {
+            headers: { 'Authorization': secretKey }
+        })
+        .then(res => {
+            if (res.status === 401) {
+                localStorage.removeItem('ytSyncSecret');
+                alert("Unauthorized! Wrong API Key. Refresh the page to try again.");
+                throw new Error("Unauthorized");
+            }
+            return res.json();
+        })
+        .then(response => {
+            const list = document.getElementById('video-list');
+            
+            if (!response.data || response.data.length === 0) {
+                list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+                return;
+            }
+            
+            list.innerHTML = response.data.map(video => `
+                <div class="video-card" id="card-${video.videoId}">
+                    <button class="delete-btn" onclick="deleteVideo('${video.videoId}')" title="Remove video">✕</button>
+                    <div>
+                        <h3 class="video-title" title="${video.title}">${video.title}</h3>
+                        <div class="timestamp">⏱ ${formatTime(video.timestamp)}</div>
+                    </div>
+                    <a class="resume-btn" href="https://youtube.com/watch?v=${video.videoId}&t=${Math.floor(video.timestamp)}s" target="_blank">
+                        Resume Video
+                    </a>
+                </div>
+            `).join('');
+        })
+        .catch(err => {
+            document.getElementById('video-list').innerHTML = '<div class="empty-state">Error loading history. Check your API key or server connection.</div>';
+        });
     }
 </script>
 </body>

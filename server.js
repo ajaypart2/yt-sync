@@ -105,6 +105,23 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
+app.delete('/api/progress/:videoId', async (req, res) => {
+    const { videoId } = req.params;
+
+    try {
+        const deletedRecord = await WatchHistory.findOneAndDelete({ videoId });
+        
+        if (deletedRecord) {
+            res.json({ success: true, message: 'Video removed from history' });
+        } else {
+            res.status(404).json({ success: false, message: 'Video not found' });
+        }
+    } catch (err) {
+        console.error('Error deleting video:', err.message);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
