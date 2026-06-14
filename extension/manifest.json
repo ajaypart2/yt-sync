@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "YT Cross-Device Sync",
+  "version": "1.0",
+  "description": "Syncs YouTube video timestamps to a self-hosted backend.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "https://www.youtube.com/* "
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/watch*"],
+      "js": ["content.js"]
+    }
+  ]
+}

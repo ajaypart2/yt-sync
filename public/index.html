@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT Sync</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary: #ff0000;
+            --text-main: #333333;
+            --text-muted: #777777;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #eaeaea;
+            padding-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .video-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .video-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        }
+
+        .video-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 10px 0;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .timestamp {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .resume-btn {
+            display: block;
+            text-align: center;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        .resume-btn:hover {
+            background-color: #cc0000;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Continue Watching</h2>
+    <div id="video-list" class="grid">
+        <div class="empty-state">Loading your history...</div>
+    </div>
+
+<script>
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}m ${s}s`;
+    }
+
+    // 1. Get the key from the browser, or ask the user for it
+    let secretKey = localStorage.getItem('ytSyncSecret');
+    if (!secretKey) {
+        secretKey = prompt("Enter your YT Sync API Secret Key:");
+        if (secretKey) {
+            localStorage.setItem('ytSyncSecret', secretKey);
+        }
+    }
+
+    // 2. Fetch the history WITH the Authorization header
+    if (secretKey) {
+        fetch('/api/history', {
+            headers: { 'Authorization': secretKey }
+        })
+        .then(res => {
+            if (res.status === 401) {
+                // If wrong password, clear it so they can try again next time
+                localStorage.removeItem('ytSyncSecret');
+                alert("Unauthorized! Wrong API Key. Refresh the page to try again.");
+                throw new Error("Unauthorized");
+            }
+            return res.json();
+        })
+        .then(response => {
+            const list = document.getElementById('video-list');
+            
+            if (!response.data || response.data.length === 0) {
+                list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+                return;
+            }
+            
+            list.innerHTML = response.data.map(video => `
+                <div class="video-card">
+                    <div>
+                        <h3 class="video-title" title="${video.title}">${video.title}</h3>
+                        <div class="timestamp">⏱ ${formatTime(video.timestamp)}</div>
+                    </div>
+                    <a class="resume-btn" href="https://youtube.com/watch?v=${video.videoId}&t=${Math.floor(video.timestamp)}s" target="_blank">
+                        Resume Video
+                    </a>
+                </div>
+            `).join('');
+        })
+        .catch(err => {
+            document.getElementById('video-list').innerHTML = '<div class="empty-state">Error loading history. Check your API key or server connection.</div>';
+        });
+    } else {
+        document.getElementById('video-list').innerHTML = '<div class="empty-state">API Key required to view history.</div>';
+    }
+</script>
+</body>
+</html>
