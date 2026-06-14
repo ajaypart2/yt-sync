@@ -29,9 +29,9 @@ const YtWatchHistorySchema = new mongoose.Schema({
     videoId: { type: String, required: true },
     title: { type: String, default: 'Unknown Video' },
     timestamp: { type: Number, required: true },
+    isManual: { type: Boolean, default: false },
     lastUpdated: { type: Date, default: Date.now }
 });
-// Ensure a user can only have one record per video
 YtWatchHistorySchema.index({ userId: 1, videoId: 1 }, { unique: true });
 const YtWatchHistory = mongoose.model('YtWatchHistory', YtWatchHistorySchema);
 
@@ -88,26 +88,39 @@ app.use('/api/progress', (req, res, next) => {
 
 // Save Progress WITH 30-Video Limit Enforcement
 app.post('/api/progress', async (req, res) => {
-    const { videoId, title, timestamp } = req.body;
+    let { videoId, title, timestamp } = req.body;
     const userId = req.user.userId;
+    let isManual = false;
 
     try {
-        // 1. Upsert the video for THIS specific user
+        // If it came from the manual dashboard input, fetch the real title!
+        if (title === "Added via Mobile Share" || !title) {
+            isManual = true; // Flag it so the UI knows to show the tag
+            try {
+                const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+                if (oembedRes.ok) {
+                    const oembedData = await oembedRes.json();
+                    title = oembedData.title; // Get the real title
+                } else {
+                    title = "YouTube Video"; // Fallback
+                }
+            } catch (e) {
+                title = "YouTube Video";
+            }
+        }
+
+        // Save to database
         await YtWatchHistory.findOneAndUpdate(
             { userId, videoId },
-            { title, timestamp, lastUpdated: new Date() },
+            { title, timestamp, isManual, lastUpdated: new Date() },
             { upsert: true, new: true }
         );
 
-        // 2. Enforce the 30-video limit
+        // Enforce 30-video limit
         const count = await YtWatchHistory.countDocuments({ userId });
         if (count > 30) {
-            // Find the oldest videos beyond the 30 limit
             const overage = count - 30;
-            const oldestVideos = await YtWatchHistory.find({ userId })
-                .sort({ lastUpdated: 1 }) // Ascending (oldest first)
-                .limit(overage);
-            
+            const oldestVideos = await YtWatchHistory.find({ userId }).sort({ lastUpdated: 1 }).limit(overage);
             const idsToDelete = oldestVideos.map(v => v._id);
             await YtWatchHistory.deleteMany({ _id: { $in: idsToDelete } });
         }
