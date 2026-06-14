@@ -97,13 +97,33 @@
             color: #d32f2f; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
         }
         .empty-state { text-align: center; color: var(--text-muted); padding: 40px; }
+        #downloadBtn:hover {
+            background: var(--blue) !important;
+            color: white !important;
+            border-color: var(--blue) !important;
+        }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h2>YT Sync</h2>
-        <button class="logout-btn" id="logoutBtn">Logout</button>
+   <div class="header">
+        <h2 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
+            YT Sync
+        </h2>
+        
+        <div style="display: flex; gap: 12px; align-items: center;">
+            
+            <button onclick="downloadExtension()" id="downloadBtn" style="background: #eef2f5; color: var(--blue); border: 1px solid #cce0f5; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Get Extension
+            </button>
+
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
     </div>
 
     <div id="auth-overlay">
@@ -301,6 +321,10 @@
                 statusDiv.innerText = "Error: " + err.message; statusDiv.style.color = "red";
             }
         });
+
+        function downloadExtension() {
+            window.location.href = '/api/download-extension';
+        }
 
         // Initialize App State on Load
         checkAuthState();

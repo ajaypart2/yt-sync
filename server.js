@@ -4,6 +4,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -160,6 +161,25 @@ app.delete('/api/progress/:videoId', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Database error' });
     }
+});
+
+// Download the extension from GitHub
+app.get('/api/download-extension', (req, res) => {
+    const githubZipUrl = 'https://raw.githubusercontent.com/ajaypart2/yt-sync/main/extension.zip';
+
+    https.get(githubZipUrl, (githubRes) => {
+        if (githubRes.statusCode !== 200) {
+            console.error(`GitHub returned status code: ${githubRes.statusCode}`);
+            return res.status(404).send('File not found');
+        }
+        res.setHeader('Content-Disposition', 'attachment; filename="yt-sync-extension.zip"');
+        res.setHeader('Content-Type', 'application/zip');
+
+        githubRes.pipe(res);
+    }).on('error', (err) => {
+        console.error('Error fetching file from GitHub:', err.message);
+        res.status(500).send('Server error while downloading file');
+    });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
