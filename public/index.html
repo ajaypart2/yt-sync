@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Sync</title>
-    <style>
+    <link rel="manifest" href="/manifest.json"> <style>
         :root {
             --bg-color: #f4f7f6;
             --card-bg: #ffffff;
             --primary: #ff0000;
+            --primary-hover: #cc0000;
             --text-main: #333333;
             --text-muted: #777777;
+            --blue: #0066cc;
         }
 
         body {
@@ -22,239 +24,277 @@
             margin: 0 auto;
         }
 
-        h2 {
-            font-size: 24px;
-            margin-bottom: 24px;
+        /* Header UI */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 2px solid #eaeaea;
             padding-bottom: 10px;
+            margin-bottom: 24px;
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+        .header h2 { margin: 0; font-size: 24px; }
+        .logout-btn {
+            background: #f0f0f0; border: none; padding: 6px 12px;
+            border-radius: 4px; cursor: pointer; font-size: 14px;
+            display: none; /* Hidden until logged in */
         }
 
+        /* Main App Container (Hidden until logged in) */
+        #app-container { display: none; }
+
+        /* Auth Modal Overlay */
+        #auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+
+        .auth-card {
+            background: var(--card-bg); padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .auth-card input {
+            width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc;
+            border-radius: 6px; box-sizing: border-box; font-size: 16px;
+        }
+
+        .auth-card button {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            font-weight: bold; font-size: 16px; color: white; cursor: pointer; margin-bottom: 10px;
+        }
+        
+        .btn-login { background: var(--text-main); }
+        .btn-register { background: var(--blue); }
+        #auth-status { font-size: 14px; margin-top: 10px; height: 20px; }
+
+        /* Video Cards UI */
+        .sync-manual-card {
+            background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         .video-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            background: var(--card-bg); border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative;
+            display: flex; flex-direction: column; justify-content: space-between;
         }
-
-        .video-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-        }
-
-        .video-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0 0 10px 0;
-            line-height: 1.4;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        .timestamp {
-            font-size: 14px;
-            color: var(--text-muted);
-            margin-bottom: 15px;
-            background: #f0f0f0;
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-
+        .video-title { font-size: 16px; font-weight: 600; margin: 0 0 10px 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .timestamp { font-size: 14px; color: var(--text-muted); margin-bottom: 15px; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        
         .resume-btn {
-            display: block;
-            text-align: center;
-            background-color: var(--primary);
-            color: white;
-            text-decoration: none;
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-weight: bold;
-            transition: background-color 0.2s;
+            display: block; text-align: center; background-color: var(--primary);
+            color: white; text-decoration: none; padding: 10px 15px; border-radius: 6px; font-weight: bold;
         }
-
-        .resume-btn:hover {
-            background-color: #cc0000;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: var(--text-muted);
-            padding: 40px;
-            font-size: 16px;
-        }
-
-        .video-card {
-            /* Add this line to your existing .video-card class so we can position the delete button inside it */
-            position: relative; 
-        }
-
+        
         .delete-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(255, 0, 0, 0.1);
-            color: #d32f2f;
-            border: none;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
+            position: absolute; top: 10px; right: 10px; background: rgba(255,0,0,0.1);
+            color: #d32f2f; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
         }
-
-        .delete-btn:hover {
-            background: #d32f2f;
-            color: white;
-        }
+        .empty-state { text-align: center; color: var(--text-muted); padding: 40px; }
     </style>
 </head>
 <body>
-    <h2>Continue Watching</h2>
-    <div id="video-list" class="grid">
-        <div class="empty-state">Loading your history...</div>
+
+    <div class="header">
+        <h2>YT Sync</h2>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
     </div>
 
-<script>
-    function formatTime(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        return `${m}m ${s}s`;
-    }
+    <div id="auth-overlay">
+        <div class="auth-card">
+            <h2 style="margin-top: 0;">Welcome</h2>
+            <input type="text" id="auth-user" placeholder="Username">
+            <input type="password" id="auth-pass" placeholder="Password">
+            <button class="btn-login" id="loginBtn">Login</button>
+            <button class="btn-register" id="registerBtn">Register</button>
+            <div id="auth-status"></div>
+        </div>
+    </div>
 
-    // 1. Get the key from the browser, or ask the user for it
-    let secretKey = localStorage.getItem('ytSyncSecret');
-    if (!secretKey) {
-        secretKey = prompt("Enter your YT Sync API Secret Key:");
-        if (secretKey) {
-            localStorage.setItem('ytSyncSecret', secretKey);
-        }
-    }
+    <div id="app-container">
+        
+        <div class="sync-manual-card">
+            <h3 style="margin-top: 0; font-size: 16px;">Manual Sync</h3>
+            <p style="font-size: 12px; color: #777; margin-bottom: 10px;">Paste a YouTube share link (with timestamp) below:</p>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="manualLink" placeholder="https://youtu.be/..." style="flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <button id="saveLinkBtn" style="background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">Sync</button>
+            </div>
+            <div id="syncStatus" style="font-size: 12px; margin-top: 10px;"></div>
+        </div>
 
-    // 2. Fetch the history WITH the Authorization header
-    if (secretKey) {
-        fetch('/api/history', {
-            headers: { 'Authorization': secretKey }
-        })
-        .then(res => {
-            if (res.status === 401) {
-                // If wrong password, clear it so they can try again next time
-                localStorage.removeItem('ytSyncSecret');
-                alert("Unauthorized! Wrong API Key. Refresh the page to try again.");
-                throw new Error("Unauthorized");
-            }
-            return res.json();
-        })
-        .then(response => {
-            const list = document.getElementById('video-list');
-            
-            if (!response.data || response.data.length === 0) {
-                list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
-                return;
-            }
-            
-            list.innerHTML = response.data.map(video => `
-                <div class="video-card">
-                    <div>
-                        <h3 class="video-title" title="${video.title}">${video.title}</h3>
-                        <div class="timestamp">⏱ ${formatTime(video.timestamp)}</div>
-                    </div>
-                    <a class="resume-btn" href="https://youtube.com/watch?v=${video.videoId}&t=${Math.floor(video.timestamp)}s" target="_blank">
-                        Resume Video
-                    </a>
-                </div>
-            `).join('');
-        })
-        .catch(err => {
-            document.getElementById('video-list').innerHTML = '<div class="empty-state">Error loading history. Check your API key or server connection.</div>';
-        });
-    } else {
-        document.getElementById('video-list').innerHTML = '<div class="empty-state">API Key required to view history.</div>';
-    }
+        <div id="video-list" class="grid">
+            <div class="empty-state">Loading your history...</div>
+        </div>
+    </div>
 
+    <script>
+        // --- 1. UI State & Auth Management ---
+        const authOverlay = document.getElementById('auth-overlay');
+        const appContainer = document.getElementById('app-container');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const statusDiv = document.getElementById('auth-status');
 
-    // We attach this to the window object so the inline onclick button can find it
-    window.deleteVideo = async function(videoId) {
-        if (!confirm("Remove this video from your history?")) return;
+        let secretKey = localStorage.getItem('ytSyncSecret');
 
-        try {
-            const response = await fetch(`/api/progress/${videoId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': secretKey }
-            });
-
-            if (response.ok) {
-                // If successful, instantly remove the card from the screen without refreshing
-                const card = document.getElementById(`card-${videoId}`);
-                if (card) card.remove();
-                
-                // If that was the last video, show the empty state
-                const list = document.getElementById('video-list');
-                if (list.children.length === 0) {
-                    list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
-                }
+        function checkAuthState() {
+            if (secretKey) {
+                authOverlay.style.display = 'none';
+                appContainer.style.display = 'block';
+                logoutBtn.style.display = 'block';
+                loadHistory();
             } else {
-                alert("Failed to delete video. Please try again.");
+                authOverlay.style.display = 'flex';
+                appContainer.style.display = 'none';
+                logoutBtn.style.display = 'none';
             }
-        } catch (err) {
-            console.error("Error deleting:", err);
-            alert("Network error while trying to delete.");
         }
-    };
 
-    // Your existing fetch history logic...
-    if (secretKey) {
-        fetch('/api/history', {
-            headers: { 'Authorization': secretKey }
-        })
-        .then(res => {
-            if (res.status === 401) {
-                localStorage.removeItem('ytSyncSecret');
-                alert("Unauthorized! Wrong API Key. Refresh the page to try again.");
-                throw new Error("Unauthorized");
-            }
-            return res.json();
-        })
-        .then(response => {
-            const list = document.getElementById('video-list');
+        async function handleAuth(endpoint) {
+            const username = document.getElementById('auth-user').value;
+            const password = document.getElementById('auth-pass').value;
             
-            if (!response.data || response.data.length === 0) {
-                list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+            if (!username || !password) {
+                statusDiv.innerText = "Please enter both fields.";
+                statusDiv.style.color = "red";
                 return;
             }
-            
-            list.innerHTML = response.data.map(video => `
-                <div class="video-card" id="card-${video.videoId}">
-                    <button class="delete-btn" onclick="deleteVideo('${video.videoId}')" title="Remove video">✕</button>
-                    <div>
-                        <h3 class="video-title" title="${video.title}">${video.title}</h3>
-                        <div class="timestamp">⏱ ${formatTime(video.timestamp)}</div>
-                    </div>
-                    <a class="resume-btn" href="https://youtube.com/watch?v=${video.videoId}&t=${Math.floor(video.timestamp)}s" target="_blank">
-                        Resume Video
-                    </a>
-                </div>
-            `).join('');
-        })
-        .catch(err => {
-            document.getElementById('video-list').innerHTML = '<div class="empty-state">Error loading history. Check your API key or server connection.</div>';
+
+            statusDiv.innerText = "Working...";
+            statusDiv.style.color = "var(--text-main)";
+
+            try {
+                const res = await fetch(`/api/auth/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (data.token) {
+                    secretKey = data.token;
+                    localStorage.setItem('ytSyncSecret', secretKey);
+                    checkAuthState();
+                } else {
+                    statusDiv.innerText = data.error || data.message;
+                    statusDiv.style.color = "red";
+                }
+            } catch (err) {
+                statusDiv.innerText = "Network error. Server might be down.";
+                statusDiv.style.color = "red";
+            }
+        }
+
+        document.getElementById('loginBtn').addEventListener('click', () => handleAuth('login'));
+        document.getElementById('registerBtn').addEventListener('click', () => handleAuth('register'));
+        
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('ytSyncSecret');
+            secretKey = null;
+            document.getElementById('auth-user').value = '';
+            document.getElementById('auth-pass').value = '';
+            statusDiv.innerText = '';
+            checkAuthState();
         });
-    }
-</script>
+
+        // --- 2. Data Fetching ---
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}m ${s}s`;
+        }
+
+        function loadHistory() {
+            fetch('/api/progress/history', {
+                headers: { 'Authorization': secretKey }
+            })
+            .then(res => {
+                if (res.status === 401) {
+                    logoutBtn.click(); // Force logout if token is invalid
+                    throw new Error("Session expired.");
+                }
+                return res.json();
+            })
+            .then(response => {
+                const list = document.getElementById('video-list');
+                
+                if (!response.data || response.data.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+                    return;
+                }
+                
+                list.innerHTML = response.data.map(video => `
+                    <div class="video-card" id="card-${video.videoId}">
+                        <button class="delete-btn" onclick="deleteVideo('${video.videoId}')" title="Remove video">✕</button>
+                        <div>
+                            <h3 class="video-title" title="${video.title}">${video.title}</h3>
+                            <div class="timestamp">⏱ ${formatTime(video.timestamp)}</div>
+                        </div>
+                        <a class="resume-btn" href="https://youtube.com/watch?v=${video.videoId}&t=${Math.floor(video.timestamp)}s" target="_blank">
+                            Resume Video
+                        </a>
+                    </div>
+                `).join('');
+            })
+            .catch(err => console.error("History load error:", err));
+        }
+
+        // --- 3. Delete Logic ---
+        window.deleteVideo = async function(videoId) {
+            if (!confirm("Remove this video?")) return;
+            try {
+                const response = await fetch(`/api/progress/${videoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': secretKey }
+                });
+                if (response.ok) {
+                    document.getElementById(`card-${videoId}`).remove();
+                    if (document.getElementById('video-list').children.length === 0) {
+                        document.getElementById('video-list').innerHTML = '<div class="empty-state">No videos saved yet. Start watching!</div>';
+                    }
+                }
+            } catch (err) { alert("Network error deleting video."); }
+        };
+
+        // --- 4. Manual Sync Logic ---
+        document.getElementById('saveLinkBtn').addEventListener('click', async () => {
+            const urlInput = document.getElementById('manualLink').value;
+            const statusDiv = document.getElementById('syncStatus');
+            if (!urlInput) return;
+
+            try {
+                const urlObj = new URL(urlInput);
+                let videoId = urlObj.hostname.includes('youtu.be') ? urlObj.pathname.slice(1) : urlObj.searchParams.get('v');
+                let timestamp = parseInt(urlObj.searchParams.get('t')) || 0;
+
+                if (!videoId) throw new Error("Invalid YouTube Link");
+
+                statusDiv.innerText = "Syncing..."; statusDiv.style.color = "orange";
+
+                const response = await fetch('/api/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': secretKey },
+                    body: JSON.stringify({ videoId: videoId, title: "Added via Mobile Share", timestamp: timestamp })
+                });
+
+                if (response.ok) {
+                    statusDiv.innerText = "Synced! Reloading..."; statusDiv.style.color = "green";
+                    document.getElementById('manualLink').value = '';
+                    setTimeout(() => { statusDiv.innerText = ''; loadHistory(); }, 1000);
+                } else { throw new Error("Server rejected"); }
+            } catch (err) {
+                statusDiv.innerText = "Error: " + err.message; statusDiv.style.color = "red";
+            }
+        });
+
+        // Initialize App State on Load
+        checkAuthState();
+    </script>
 </body>
 </html>

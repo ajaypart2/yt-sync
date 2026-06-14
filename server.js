@@ -2,126 +2,151 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-very-secure-jwt-secret';
 
-// Middleware
-app.use(cors({
-    origin: '*',
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors({ origin: '*', allowedHeaders: ['Content-Type', 'Authorization'] }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- AUTHENTICATION MIDDLEWARE ---
-// Use an environment variable, or fallback to a hardcoded string for local testing
-const API_SECRET = 'Ajay@1412001';
+mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://akhambhayta:512001@yt-sync-app.9vlqyyl.mongodb.net/')
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => console.error('MongoDB error:', err));
 
-app.use('/api', (req, res, next) => {
-    // CRITICAL FIX: Allow browser preflight (OPTIONS) requests to pass through without checking credentials
-    if (req.method === 'OPTIONS') {
-        return next();
-    }
-
-    const userToken = req.headers['authorization'];
-    
-    if (userToken !== API_SECRET) {
-        console.warn(`Unauthorized request blocked. Method: ${req.method}, Path: ${req.path}`);
-        return res.status(401).json({ error: 'Unauthorized. Invalid API Key.' });
-    }
-    next();
+// --- 1. NEW SCHEMAS ---
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true }
 });
+const User = mongoose.model('User', userSchema);
 
-// --- MONGODB CONNECTION ---
-const MONGO_URI = 'mongodb+srv://akhambhayta:512001@yt-sync-app.9vlqyyl.mongodb.net/';
-
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('Connected to MongoDB successfully.'))
-    .catch(err => console.error('MongoDB connection error:', err));
-
-// --- MONGOOSE SCHEMA & MODEL ---
-const watchHistorySchema = new mongoose.Schema({
-    videoId: { type: String, required: true, unique: true },
+const YtWatchHistorySchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    videoId: { type: String, required: true },
     title: { type: String, default: 'Unknown Video' },
     timestamp: { type: Number, required: true },
     lastUpdated: { type: Date, default: Date.now }
 });
+// Ensure a user can only have one record per video
+YtWatchHistorySchema.index({ userId: 1, videoId: 1 }, { unique: true });
+const YtWatchHistory = mongoose.model('YtWatchHistory', YtWatchHistorySchema);
 
-const WatchHistory = mongoose.model('WatchHistory', watchHistorySchema);
+// --- 2. AUTH ROUTES (Public) ---
+app.post('/api/auth/register', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const existingUser = await User.findOne({ username });
+        if (existingUser) return res.status(400).json({ error: 'Username taken' });
 
-// --- API ENDPOINTS ---
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+        
+        const user = await User.create({ username, passwordHash });
+        res.json({ success: true, message: 'User registered successfully' });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
-// 1. Save or Update progress (Upsert)
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const user = await User.findOne({ username });
+        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
+        res.json({ success: true, token });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// --- 3. JWT AUTH MIDDLEWARE ---
+app.use('/api/progress', (req, res, next) => {
+    if (req.method === 'OPTIONS') return next();
+    
+    const token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded; // Attach the userId to the request
+        next();
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+});
+
+// --- 4. SECURE API ENDPOINTS ---
+
+// Save Progress WITH 30-Video Limit Enforcement
 app.post('/api/progress', async (req, res) => {
     const { videoId, title, timestamp } = req.body;
-
-    if (!videoId || timestamp === undefined) {
-        return res.status(400).json({ error: 'Missing videoId or timestamp' });
-    }
+    const userId = req.user.userId;
 
     try {
-        const updatedDoc = await WatchHistory.findOneAndUpdate(
-            { videoId },
-            { 
-                title: title || 'Unknown Video', 
-                timestamp, 
-                lastUpdated: new Date() 
-            },
+        // 1. Upsert the video for THIS specific user
+        await YtWatchHistory.findOneAndUpdate(
+            { userId, videoId },
+            { title, timestamp, lastUpdated: new Date() },
             { upsert: true, new: true }
         );
-        res.json({ success: true, data: updatedDoc });
-    } catch (err) {
-        console.error('Error saving progress:', err.message);
-        res.status(500).json({ error: 'Database error' });
-    }
-});
 
-// 2. Get progress for a specific video
-app.get('/api/progress/:videoId', async (req, res) => {
-    const { videoId } = req.params;
-
-    try {
-        const record = await WatchHistory.findOne({ videoId });
-        if (record) {
-            res.json({ success: true, data: record });
-        } else {
-            res.status(404).json({ success: false, message: 'Video not found' });
+        // 2. Enforce the 30-video limit
+        const count = await YtWatchHistory.countDocuments({ userId });
+        if (count > 30) {
+            // Find the oldest videos beyond the 30 limit
+            const overage = count - 30;
+            const oldestVideos = await YtWatchHistory.find({ userId })
+                .sort({ lastUpdated: 1 }) // Ascending (oldest first)
+                .limit(overage);
+            
+            const idsToDelete = oldestVideos.map(v => v._id);
+            await YtWatchHistory.deleteMany({ _id: { $in: idsToDelete } });
         }
+
+        res.json({ success: true });
     } catch (err) {
-        console.error('Error fetching video progress:', err.message);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-// 3. Get all watch history for the dashboard
-app.get('/api/history', async (req, res) => {
+// Get User's History
+app.get('/api/progress/history', async (req, res) => {
     try {
-        const history = await WatchHistory.find().sort({ lastUpdated: -1 });
+        const history = await YtWatchHistory.find({ userId: req.user.userId }).sort({ lastUpdated: -1 });
         res.json({ success: true, data: history });
     } catch (err) {
-        console.error('Error fetching history:', err.message);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-app.delete('/api/progress/:videoId', async (req, res) => {
-    const { videoId } = req.params;
-
+// Get Specific Video
+app.get('/api/progress/:videoId', async (req, res) => {
     try {
-        const deletedRecord = await WatchHistory.findOneAndDelete({ videoId });
-        
-        if (deletedRecord) {
-            res.json({ success: true, message: 'Video removed from history' });
-        } else {
-            res.status(404).json({ success: false, message: 'Video not found' });
-        }
+        const record = await YtWatchHistory.findOne({ userId: req.user.userId, videoId: req.params.videoId });
+        if (record) res.json({ success: true, data: record });
+        else res.status(404).json({ success: false });
     } catch (err) {
-        console.error('Error deleting video:', err.message);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+// Delete Specific Video
+app.delete('/api/progress/:videoId', async (req, res) => {
+    try {
+        await YtWatchHistory.findOneAndDelete({ userId: req.user.userId, videoId: req.params.videoId });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Database error' });
+    }
 });
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

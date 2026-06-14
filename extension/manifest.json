@@ -10,8 +10,11 @@
   "action": {
     "default_popup": "popup.html"
   },
-  "host_permissions": [
-    "https://www.youtube.com/* "
+ "host_permissions": [
+    "https://www.youtube.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://yt-sync-bc7s.onrender.com/*"
   ],
   "content_scripts": [
     {

@@ -1,19 +1,56 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const input = document.getElementById('secretKey');
-    const saveBtn = document.getElementById('saveBtn');
-    const status = document.getElementById('status');
+const BACKEND_URL = 'https://yt-sync-bc7s.onrender.com';
 
-    // Load existing key if there is one
+//const BACKEND_URL = 'http://localhost:3000';
+
+document.addEventListener('DOMContentLoaded', () => {
+    const userIn = document.getElementById('username');
+    const passIn = document.getElementById('password');
+    const status = document.getElementById('status');
+    const loginForm = document.getElementById('loginForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // Check if already logged in
     chrome.storage.local.get(['ytSyncSecret'], (result) => {
-        if (result.ytSyncSecret) input.value = result.ytSyncSecret;
+        if (result.ytSyncSecret) {
+            loginForm.style.display = 'none';
+            logoutBtn.style.display = 'block';
+            status.innerText = 'Logged in!';
+        }
     });
 
-    // Save key on click
-    saveBtn.addEventListener('click', () => {
-        const key = input.value;
-        chrome.storage.local.set({ ytSyncSecret: key }, () => {
-            status.innerText = 'Key saved securely!';
-            setTimeout(() => status.innerText = '', 2000);
+    async function handleAuth(endpoint) {
+        status.innerText = 'Working...';
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: userIn.value, password: passIn.value })
+            });
+            const data = await res.json();
+
+            if (data.token) {
+                chrome.storage.local.set({ ytSyncSecret: data.token }, () => {
+                    loginForm.style.display = 'none';
+                    logoutBtn.style.display = 'block';
+                    status.innerText = 'Success!';
+                });
+            } else {
+                status.style.color = 'red';
+                status.innerText = data.error || data.message;
+            }
+        } catch (err) {
+            status.innerText = 'Network error.';
+        }
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', () => handleAuth('login'));
+    document.getElementById('registerBtn').addEventListener('click', () => handleAuth('register'));
+    
+    logoutBtn.addEventListener('click', () => {
+        chrome.storage.local.remove('ytSyncSecret', () => {
+            loginForm.style.display = 'block';
+            logoutBtn.style.display = 'none';
+            status.innerText = 'Logged out.';
         });
     });
 });
