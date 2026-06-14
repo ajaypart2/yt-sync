@@ -1,4 +1,4 @@
-const BACKEND_URL = 'http://localhost:3000/api/progress';
+const BACKEND_URL = 'https://yt-sync-bc7s.onrender.com/api/progress';
 
 // State management to prevent infinite loops on the same video
 let currentVideoId = '';
@@ -154,6 +154,27 @@ function injectSavePrompt(videoElement, videoId) {
         // Setup the event listeners only AFTER clicking
         videoElement.addEventListener('pause', () => syncTimestamp(videoElement));
         window.addEventListener('beforeunload', () => syncTimestamp(videoElement));
+        
+        // Do an initial sync right away
+        syncTimestamp(videoElement);
+    });
+
+    promptDiv.addEventListener('click', () => {
+        promptDiv.innerText = 'Tracking...';
+        setTimeout(() => promptDiv.remove(), 1000);
+        
+        // 1. Sync on pause
+        videoElement.addEventListener('pause', () => syncTimestamp(videoElement));
+        
+        // 2. Sync on tab close (now protected by keepalive)
+        window.addEventListener('beforeunload', () => syncTimestamp(videoElement));
+        
+        // 3. THE SAFETY NET: Sync every 10 seconds while playing
+        setInterval(() => {
+            if (!videoElement.paused) {
+                syncTimestamp(videoElement);
+            }
+        }, 10000);
         
         // Do an initial sync right away
         syncTimestamp(videoElement);
