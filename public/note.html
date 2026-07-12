@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared Notes</title>
+    <style>
+        :root {
+            --bg: #f4f7f6;
+            --card: #ffffff;
+            --text: #1f2933;
+            --muted: #6b7280;
+            --accent: #2563eb;
+            --danger: #dc2626;
+        }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .header h1 { margin: 0; font-size: 24px; }
+        .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-danger { background: #fee2e2; color: var(--danger); }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+        }
+        textarea {
+            width: 100%;
+            min-height: 65vh;
+            border: 1px solid #d0d7de;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 15px;
+            resize: vertical;
+            box-sizing: border-box;
+            font-family: Consolas, monospace;
+        }
+        .hint {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .auth-box {
+            display: none;
+            margin-top: 40px;
+            text-align: center;
+        }
+        .auth-box input {
+            width: 100%; max-width: 320px; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px;
+        }
+        .auth-box button { width: 100%; max-width: 320px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="header">
+            <h1>Shared Notes</h1>
+            <div class="actions">
+                <a href="/" style="text-decoration:none; color: var(--accent); font-weight:600;">Back to Home</a>
+                <button class="btn btn-danger" id="eraseBtn">Erase</button>
+            </div>
+        </div>
+
+        <div class="card" id="noteApp">
+            <textarea id="noteText" placeholder="Type or paste text here. It will be saved for this account and synced across your devices."></textarea>
+            <div class="hint" id="statusText">Loading your note...</div>
+        </div>
+
+        <div class="auth-box" id="authBox">
+            <h2>Login required</h2>
+            <input type="text" id="authUser" placeholder="Username" />
+            <input type="password" id="authPass" placeholder="Password" />
+            <button class="btn btn-primary" id="loginBtn">Login</button>
+            <div id="authStatus" class="hint"></div>
+        </div>
+    </div>
+
+    <script>
+        const tokenKey = 'ytSyncSecret';
+        const noteApp = document.getElementById('noteApp');
+        const authBox = document.getElementById('authBox');
+        const noteText = document.getElementById('noteText');
+        const statusText = document.getElementById('statusText');
+        const authStatus = document.getElementById('authStatus');
+        let token = localStorage.getItem(tokenKey);
+        let saveTimer = null;
+        let isDirty = false;
+
+        function setAuthVisible(visible) {
+            noteApp.style.display = visible ? 'block' : 'none';
+            authBox.style.display = visible ? 'none' : 'block';
+        }
+
+        async function loadNote(force = false) {
+            if (!token) {
+                setAuthVisible(false);
+                return;
+            }
+            if (!force && isDirty) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/note', { headers: { Authorization: token } });
+                if (res.status === 401) {
+                    localStorage.removeItem(tokenKey);
+                    token = null;
+                    setAuthVisible(false);
+                    return;
+                }
+                const data = await res.json();
+                if (data.success) {
+                    const remoteContent = data.data?.content || '';
+                    if (noteText.value !== remoteContent) {
+                        noteText.value = remoteContent;
+                    }
+                    statusText.textContent = data.data ? 'Loaded from your account.' : 'No note yet. Start typing and it will save automatically.';
+                    setAuthVisible(true);
+                }
+            } catch (err) {
+                statusText.textContent = 'Unable to load note right now.';
+            }
+        }
+
+        async function saveNote() {
+            if (!token) {
+                statusText.textContent = 'Please login first.';
+                return;
+            }
+            statusText.textContent = 'Saving...';
+            try {
+                const res = await fetch('/api/note', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: token },
+                    body: JSON.stringify({ content: noteText.value })
+                });
+                if (res.ok) {
+                    isDirty = false;
+                    statusText.textContent = 'Saved. It will stay on this account across devices.';
+                } else {
+                    statusText.textContent = 'Save failed.';
+                }
+            } catch (err) {
+                statusText.textContent = 'Save failed.';
+            }
+        }
+
+        async function eraseNote() {
+            if (!token) {
+                statusText.textContent = 'Please login first.';
+                return;
+            }
+            if (!confirm('Erase this shared note for your account?')) return;
+            statusText.textContent = 'Clearing...';
+            try {
+                const res = await fetch('/api/note', { method: 'DELETE', headers: { Authorization: token } });
+                if (res.ok) {
+                    noteText.value = '';
+                    statusText.textContent = 'Note erased.';
+                } else {
+                    statusText.textContent = 'Erase failed.';
+                }
+            } catch (err) {
+                statusText.textContent = 'Erase failed.';
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('authUser').value;
+            const password = document.getElementById('authPass').value;
+            if (!username || !password) {
+                authStatus.textContent = 'Enter both fields.';
+                return;
+            }
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.token) {
+                    token = data.token;
+                    localStorage.setItem(tokenKey, token);
+                    authStatus.textContent = 'Login successful.';
+                    await loadNote();
+                } else {
+                    authStatus.textContent = data.error || 'Login failed.';
+                }
+            } catch (err) {
+                authStatus.textContent = 'Network error.';
+            }
+        }
+
+        document.getElementById('eraseBtn').addEventListener('click', eraseNote);
+        document.getElementById('loginBtn').addEventListener('click', login);
+
+        noteText.addEventListener('input', () => {
+            isDirty = true;
+            statusText.textContent = 'Saving changes automatically...';
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => {
+                saveNote();
+            }, 700);
+        });
+
+        setInterval(() => {
+            if (token) {
+                loadNote();
+            }
+        }, 3000);
+
+        loadNote(true);
+    </script>
+</body>
+</html>

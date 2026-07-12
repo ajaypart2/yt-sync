@@ -97,11 +97,42 @@
             color: #d32f2f; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer;
         }
         .empty-state { text-align: center; color: var(--text-muted); padding: 40px; }
+        .visibility-row {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+        }
+        .visibility-toggle {
+            display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer; font-weight: 600;
+        }
+        .visibility-toggle input {
+            display: none;
+        }
+        .toggle-pill {
+            width: 48px; height: 28px; border-radius: 999px; background: #d7e2f0; position: relative; transition: all 0.2s ease;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .toggle-pill::after {
+            content: '👁';
+            position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: white; display: grid; place-items: center; font-size: 12px; transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+        }
+        .visibility-toggle input:checked + .toggle-pill {
+            background: var(--blue);
+        }
+        .visibility-toggle input:checked + .toggle-pill::after {
+            left: 22px; content: '👁';
+        }
+        .video-title-blur {
+            filter: blur(6px);
+            transition: filter 0.2s ease;
+        }
+        .video-title-visible {
+            filter: none;
+        }
         #downloadBtn:hover {
             background: var(--blue) !important;
             color: white !important;
             border-color: var(--blue) !important;
-        }
+    }
     </style>
 </head>
 <body>
@@ -122,6 +153,7 @@
                 Get Extension
             </button>
 
+            <a href="/note" style="text-decoration: none; color: var(--blue); font-weight: bold;">Open Notes</a>
             <button class="logout-btn" id="logoutBtn">Logout</button>
         </div>
     </div>
@@ -149,7 +181,15 @@
             <div id="syncStatus" style="font-size: 12px; margin-top: 10px;"></div>
         </div>
 
-        <div id="video-list" class="grid">
+        <div class="visibility-row">
+            <div style="font-size: 13px; color: var(--text-muted);">Your YouTube list</div>
+            <label class="visibility-toggle">
+                <input type="checkbox" id="visibilityToggle">
+                <span class="toggle-pill"></span>
+            </label>
+        </div>
+
+        <div id="video-list" class="grid video-list-visible">
             <div class="empty-state">Loading your history...</div>
         </div>
     </div>
@@ -160,6 +200,8 @@
         const appContainer = document.getElementById('app-container');
         const logoutBtn = document.getElementById('logoutBtn');
         const statusDiv = document.getElementById('auth-status');
+        const visibilityToggle = document.getElementById('visibilityToggle');
+        const videoList = document.getElementById('video-list');
 
         let secretKey = localStorage.getItem('ytSyncSecret');
 
@@ -223,6 +265,17 @@
             checkAuthState();
         });
 
+        function toggleVideoVisibility() {
+            const visible = visibilityToggle.checked;
+            const titles = videoList.querySelectorAll('.video-title');
+            titles.forEach(title => {
+                title.classList.toggle('video-title-blur', !visible);
+                title.classList.toggle('video-title-visible', visible);
+            });
+        }
+
+        visibilityToggle.addEventListener('change', toggleVideoVisibility);
+
         // --- 2. Data Fetching ---
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60);
@@ -270,6 +323,7 @@
                     </div>
                     `;
                 }).join('');
+                toggleVideoVisibility();
             })
             .catch(err => console.error("History load error:", err));
         }

@@ -25,6 +25,13 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+const noteSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    content: { type: String, default: '' },
+    updatedAt: { type: Date, default: Date.now }
+});
+const Note = mongoose.model('Note', noteSchema);
+
 const YtWatchHistorySchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     videoId: { type: String, required: true },
@@ -70,7 +77,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- 3. JWT AUTH MIDDLEWARE ---
-app.use('/api/progress', (req, res, next) => {
+app.use(['/api/progress', '/api/note'], (req, res, next) => {
     if (req.method === 'OPTIONS') return next();
     
     const token = req.headers['authorization'];
@@ -163,6 +170,39 @@ app.delete('/api/progress/:videoId', async (req, res) => {
     }
 });
 
+// Shared note for the logged-in user
+app.get('/api/note', async (req, res) => {
+    try {
+        const note = await Note.findOne({ userId: req.user.userId });
+        res.json({ success: true, data: note ? { content: note.content, updatedAt: note.updatedAt } : null });
+    } catch (err) {
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.post('/api/note', async (req, res) => {
+    const { content } = req.body;
+    try {
+        await Note.findOneAndUpdate(
+            { userId: req.user.userId },
+            { content: content || '', updatedAt: new Date() },
+            { upsert: true, new: true }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.delete('/api/note', async (req, res) => {
+    try {
+        await Note.deleteOne({ userId: req.user.userId });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // Download the extension from GitHub
 app.get('/api/download-extension', (req, res) => {
     const githubZipUrl = 'https://raw.githubusercontent.com/ajaypart2/yt-sync/main/extension.zip';
@@ -180,6 +220,14 @@ app.get('/api/download-extension', (req, res) => {
         console.error('Error fetching file from GitHub:', err.message);
         res.status(500).send('Server error while downloading file');
     });
+});
+
+app.get('/note', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'note.html'));
+});
+
+app.get('/note/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'note.html'));
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
