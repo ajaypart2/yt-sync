@@ -42,6 +42,21 @@
         }
         .btn-primary { background: var(--accent); color: white; }
         .btn-danger { background: #fee2e2; color: var(--danger); }
+         .nav-icon-link {
+            text-decoration: none; color: var(--accent); font-weight: bold; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #eef2f5; font-size: 18px; transition: all 0.2s ease;
+        }
+        .nav-icon-link:hover {
+            background: #dfe8f2;
+        }
+        @media (max-width: 768px) {
+            .header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+        }
         .card {
             background: var(--card);
             border-radius: 16px;
@@ -80,7 +95,7 @@
         <div class="header">
             <h1>Shared Notes</h1>
             <div class="actions">
-                <a href="/" style="text-decoration:none; color: var(--accent); font-weight:600;">Back to Home</a>
+                <a href="/" class="nav-icon-link" title="Back to Home">🏠</a>
                 <button class="btn btn-danger" id="eraseBtn">Erase</button>
             </div>
         </div>

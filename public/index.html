@@ -128,6 +128,27 @@
         .video-title-visible {
             filter: none;
         }
+        .nav-icon-link {
+            text-decoration: none; color: var(--blue); font-weight: bold; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #eef2f5; font-size: 18px; transition: all 0.2s ease;
+        }
+        .nav-icon-link:hover {
+            background: #dfe8f2;
+        }
+        @media (max-width: 768px) {
+            .header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .header h2 {
+                font-size: 20px;
+            }
+            .nav-icon-link span {
+                display: none;
+            }
+            .nav-icon-link {
+                width: 38px; height: 38px;
+            }
+        }
         #downloadBtn:hover {
             background: var(--blue) !important;
             color: white !important;
@@ -153,7 +174,7 @@
                 Get Extension
             </button>
 
-            <a href="/note" style="text-decoration: none; color: var(--blue); font-weight: bold;">Open Notes</a>
+            <a href="/note" class="nav-icon-link" title="Open Notes">📝</a>
             <button class="logout-btn" id="logoutBtn">Logout</button>
         </div>
     </div>
