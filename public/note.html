@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Code & Text Share</title>
+    <title>Code, Text & File Share</title>
     <style>
         :root {
             --bg: #f4f7f6;
@@ -16,6 +16,8 @@
             --danger: #dc2626;
             --danger-bg: #fee2e2;
             --success: #10b981;
+            --warning-bg: #fef3c7;
+            --warning-text: #92400e;
             --font-code: "Consolas", "Monaco", "Courier New", monospace;
         }
 
@@ -40,6 +42,7 @@
             padding: 20px;
             display: flex;
             flex-direction: column;
+            gap: 16px;
             flex-grow: 1;
         }
 
@@ -48,7 +51,6 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            margin-bottom: 14px;
             flex-wrap: wrap;
         }
 
@@ -167,6 +169,7 @@
             align-items: center;
             gap: 5px;
             transition: all 0.15s ease;
+            text-decoration: none;
         }
 
         .btn-sm {
@@ -207,8 +210,145 @@
             background: var(--card);
             border-radius: 14px;
             padding: 16px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.04);
             border: 1px solid var(--border);
+        }
+
+        /* --- File Sharing Section --- */
+        .files-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+
+        .files-card.highlight {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.25);
+        }
+
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .files-title {
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-warning {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--warning-bg);
+            color: var(--warning-text);
+        }
+
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent);
+            background: #eff6ff;
+            color: var(--accent);
+        }
+
+        .files-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+
+        .file-item {
+            background: #fafbfc;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .file-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            background: #ffffff;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex-grow: 1;
+        }
+
+        .file-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .file-details {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .file-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #0f172a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .file-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .empty-files {
+            font-size: 13px;
+            color: var(--muted);
+            text-align: center;
+            padding: 10px;
+            font-style: italic;
+        }
+
+        /* --- Text/Code Editor Section --- */
+        .editor-card {
             display: flex;
             flex-direction: column;
             flex-grow: 1;
@@ -223,7 +363,7 @@
 
         textarea {
             width: 100%;
-            height: 65vh;
+            height: 55vh;
             border: 1px solid #e2e8f0;
             border-radius: 10px;
             padding: 14px;
@@ -326,7 +466,7 @@
                 justify-content: space-between;
             }
             textarea {
-                min-height: 55vh;
+                min-height: 45vh;
             }
         }
     </style>
@@ -335,8 +475,13 @@
     <div class="wrap">
         <div class="header">
             <div class="header-left">
-                <a href="/" class="nav-icon-link" title="Back to Dashboard">🏠</a>
-                <h1>Code & Text Share <span class="tag">Encrypted URL</span></h1>
+                <a href="/" class="nav-icon-link" title="Back to Dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                </a>
+                <h1>Code, Text & File Share <span class="tag">In-Memory Sync</span></h1>
             </div>
 
             <div class="room-bar">
@@ -353,7 +498,32 @@
             </div>
         </div>
 
-        <div class="card">
+        <!-- Ephemeral File Sharing Section -->
+        <div class="card files-card" id="filesSection">
+            <div class="files-header">
+                <div class="files-title">
+                    <span>📁 Shared Files</span>
+                    <span class="tag-warning">Auto-purged in 30m</span>
+                </div>
+                <div class="files-actions">
+                    <input type="file" id="fileInput" style="display: none;">
+                    <button class="btn btn-primary btn-sm" id="uploadBtn" title="Choose file to share">
+                        <span>➕ Attach File</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+                <span>📤 Drag & drop any file here (Max 25MB), or click to upload</span>
+            </div>
+
+            <div class="files-list" id="filesList">
+                <div class="empty-files">No files in this room yet. Upload a file to share it across devices.</div>
+            </div>
+        </div>
+
+        <!-- Text & Code Editor Section -->
+        <div class="card editor-card">
             <div class="editor-container">
                 <textarea id="noteText" placeholder="Type or paste code / text here... Changes sync in real-time across your devices without saving to any database."></textarea>
             </div>
@@ -365,7 +535,7 @@
                 </div>
                 <div class="status-right">
                     <span id="statsText">0 lines • 0 chars</span>
-                    <span>🔒 URL & ID Encrypted</span>
+                    <span>🔒 In-Memory & Encrypted</span>
                 </div>
             </div>
         </div>
@@ -439,6 +609,34 @@
             }
         }
 
+        // --- Format Helpers ---
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function getFileIcon(filename) {
+            const ext = (filename.split('.').pop() || '').toLowerCase();
+            if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return '🖼️';
+            if (['zip', 'rar', 'tar', 'gz', '7z', 'bz2'].includes(ext)) return '📦';
+            if (['pdf'].includes(ext)) return '📕';
+            if (['js', 'ts', 'jsx', 'tsx', 'html', 'css', 'json', 'py', 'java', 'c', 'cpp', 'rs', 'go', 'php'].includes(ext)) return '📜';
+            if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return '🎵';
+            if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) return '🎬';
+            return '📄';
+        }
+
+        function getTimeRemainingText(expiresAt) {
+            if (!expiresAt) return '';
+            const remainingSec = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+            const mins = Math.floor(remainingSec / 60);
+            if (mins <= 0) return 'Expiring soon';
+            return `Expires in ~${mins}m`;
+        }
+
         // --- DOM Elements ---
         const roomInput = document.getElementById('roomInput');
         const toggleMaskBtn = document.getElementById('toggleMaskBtn');
@@ -453,10 +651,18 @@
         const statsText = document.getElementById('statsText');
         const toast = document.getElementById('toast');
 
+        // File elements
+        const filesSection = document.getElementById('filesSection');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const dropZone = document.getElementById('dropZone');
+        const filesList = document.getElementById('filesList');
+
         let currentRoom = '';
         let saveTimer = null;
         let isDirty = false;
         let lastRemoteUpdatedAt = 0;
+        let knownFilesJson = '';
 
         function showToast(message) {
             toast.textContent = message;
@@ -491,10 +697,12 @@
             }
 
             if (window.location.hash) {
-                const hash = window.location.hash.replace(/^#/, '').trim();
-                const dec = decryptRoom(hash);
-                if (dec) return dec;
-                if (hash) return hash.toLowerCase();
+                const cleanHash = window.location.hash.replace(/^#/, '').trim();
+                if (cleanHash && cleanHash !== 'files') {
+                    const dec = decryptRoom(cleanHash);
+                    if (dec) return dec;
+                    return cleanHash.toLowerCase();
+                }
             }
 
             const saved = localStorage.getItem('ytSyncSharedRoom');
@@ -503,10 +711,10 @@
             return generateRandomCode();
         }
 
-        // Always displays the ENCRYPTED token in the search bar!
         function updateUrlWithEncryptedToken(roomId) {
             const token = encryptRoom(roomId);
-            const newUrl = `${window.location.origin}/note?key=${encodeURIComponent(token)}`;
+            const hash = window.location.hash || '';
+            const newUrl = `${window.location.origin}/note?key=${encodeURIComponent(token)}${hash}`;
             window.history.replaceState({ room: roomId }, '', newUrl);
             localStorage.setItem('ytSyncSharedRoom', roomId);
             return newUrl;
@@ -519,13 +727,47 @@
             statsText.textContent = `${lines} ${lines === 1 ? 'line' : 'lines'} • ${chars} ${chars === 1 ? 'char' : 'chars'}`;
         }
 
+        function renderFiles(files) {
+            const json = JSON.stringify(files);
+            if (json === knownFilesJson) return;
+            knownFilesJson = json;
+
+            if (!files || files.length === 0) {
+                filesList.innerHTML = '<div class="empty-files">No files in this room yet. Upload a file to share it across devices.</div>';
+                return;
+            }
+
+            const token = encryptRoom(currentRoom);
+            filesList.innerHTML = files.map(file => {
+                const icon = getFileIcon(file.name);
+                const sizeStr = formatBytes(file.size);
+                const timeStr = getTimeRemainingText(file.expiresAt);
+                const downloadUrl = `/api/rooms/${encodeURIComponent(token)}/files/${encodeURIComponent(file.id)}`;
+
+                return `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <span class="file-icon">${icon}</span>
+                            <div class="file-details">
+                                <div class="file-name" title="${file.name}">${file.name}</div>
+                                <div class="file-meta">${sizeStr} • ${timeStr}</div>
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <a class="btn btn-primary btn-sm" href="${downloadUrl}" download="${file.name}" title="Download file">⬇️ Download</a>
+                            <button class="btn btn-danger btn-sm" onclick="deleteFile('${file.id}')" title="Delete file from room">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         async function switchRoom(roomId, clearEditor = false) {
             if (!roomId) return;
             const dec = decryptRoom(roomId);
             currentRoom = (dec || roomId).trim().toLowerCase().slice(0, 32);
             roomInput.value = currentRoom;
 
-            // Encrypted URL in search bar
             updateUrlWithEncryptedToken(currentRoom);
 
             if (clearEditor) {
@@ -544,7 +786,6 @@
             if (!force && isDirty) return;
 
             try {
-                // Send encrypted token to server
                 const token = encryptRoom(currentRoom);
                 const res = await fetch(`/api/rooms/${encodeURIComponent(token)}`);
                 if (!res.ok) throw new Error('Network error');
@@ -561,6 +802,9 @@
                         }
                         lastRemoteUpdatedAt = remoteUpdated;
                     }
+
+                    // Render active files
+                    renderFiles(data.files || []);
 
                     statusDot.className = 'status-dot';
                     statusText.textContent = 'Connected & in-sync';
@@ -600,22 +844,105 @@
         }
 
         async function eraseRoom() {
-            if (!confirm('Clear all code/text in this room?')) return;
+            if (!confirm('Clear all code, text and files in this room?')) return;
             try {
                 const token = encryptRoom(currentRoom);
                 await fetch(`/api/rooms/${encodeURIComponent(token)}`, { method: 'DELETE' });
                 noteText.value = '';
                 updateStats();
                 isDirty = false;
+                renderFiles([]);
                 statusDot.className = 'status-dot';
                 statusText.textContent = 'Room cleared.';
-                showToast('Cleared room content');
+                showToast('Cleared room content & files');
             } catch (err) {
                 alert('Failed to clear room.');
             }
         }
 
-        // --- Event Listeners ---
+        // --- File Upload & Delete Logic ---
+        async function uploadFile(file) {
+            if (!file) return;
+            if (file.size > 25 * 1024 * 1024) {
+                alert(`File "${file.name}" exceeds the 25MB in-memory limit.`);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            statusDot.className = 'status-dot saving';
+            statusText.textContent = `Uploading ${file.name}...`;
+            showToast(`Uploading ${file.name}...`);
+
+            try {
+                const token = encryptRoom(currentRoom);
+                const res = await fetch(`/api/rooms/${encodeURIComponent(token)}/files`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Upload failed');
+                }
+
+                showToast(`Uploaded ${file.name}`);
+                await loadRoom(true);
+            } catch (err) {
+                alert(`Upload failed: ${err.message}`);
+                statusDot.className = 'status-dot error';
+                statusText.textContent = 'Upload failed.';
+            }
+        }
+
+        window.deleteFile = async function(fileId) {
+            if (!confirm('Remove this file from the room?')) return;
+            try {
+                const token = encryptRoom(currentRoom);
+                const res = await fetch(`/api/rooms/${encodeURIComponent(token)}/files/${encodeURIComponent(fileId)}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    showToast('File removed');
+                    await loadRoom(true);
+                } else {
+                    throw new Error();
+                }
+            } catch (e) {
+                alert('Failed to remove file');
+            }
+        };
+
+        // --- File Upload Listeners ---
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                uploadFile(e.target.files[0]);
+                fileInput.value = '';
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                uploadFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // --- Text/Code Event Listeners ---
         noteText.addEventListener('input', () => {
             isDirty = true;
             updateStats();
@@ -625,7 +952,6 @@
             saveTimer = setTimeout(saveRoom, 450);
         });
 
-        // Tab key indents by 2 spaces
         noteText.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
@@ -641,7 +967,6 @@
             }
         });
 
-        // Toggle mask (show/hide password style for Room Input)
         toggleMaskBtn.addEventListener('click', () => {
             if (roomInput.type === 'password') {
                 roomInput.type = 'text';
@@ -676,7 +1001,6 @@
             showToast('Created new private room');
         });
 
-        // Always copy the ENCRYPTED share link!
         shareLinkBtn.addEventListener('click', async () => {
             const token = encryptRoom(currentRoom);
             const shareUrl = `${window.location.origin}/note?key=${encodeURIComponent(token)}`;
@@ -727,6 +1051,15 @@
         // Initialize
         const initialRoom = getInitialRoom();
         switchRoom(initialRoom);
+
+        // Check if coming from #files anchor
+        if (window.location.hash === '#files') {
+            setTimeout(() => {
+                filesSection.scrollIntoView({ behavior: 'smooth' });
+                filesSection.classList.add('highlight');
+                setTimeout(() => filesSection.classList.remove('highlight'), 1800);
+            }, 300);
+        }
     </script>
 </body>
 </html>

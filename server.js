@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const https = require('https');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -163,20 +164,53 @@ app.delete('/api/progress/:videoId', async (req, res) => {
     }
 });
 
-// --- 5. IN-MEMORY ROOM STORE (NO DATABASE) ---
-// Key: roomId -> { content: string, updatedAt: number, lastAccessed: number }
+// --- 5. IN-MEMORY ROOM & FILE STORE (NO DATABASE) ---
+// Key: roomId -> { content: string, updatedAt: number, lastAccessed: number, files: Map<fileId, FileObj> }
 const sharedRooms = new Map();
 
-// Periodic cleanup: delete rooms inactive for more than 24 hours
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 } // 25MB limit per file
+});
+
+function getOrCreateRoom(roomId) {
+    let room = sharedRooms.get(roomId);
+    if (!room) {
+        room = {
+            content: '',
+            updatedAt: null,
+            lastAccessed: Date.now(),
+            files: new Map()
+        };
+        sharedRooms.set(roomId, room);
+    }
+    if (!room.files) room.files = new Map();
+    return room;
+}
+
+// Periodic cleanup: delete files older than 30 minutes, and rooms inactive for > 24 hours
 setInterval(() => {
     const now = Date.now();
+    const THIRTY_MINUTES = 30 * 60 * 1000;
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
     for (const [roomId, room] of sharedRooms.entries()) {
-        if (now - room.lastAccessed > TWENTY_FOUR_HOURS) {
+        // 1. Purge expired files (30-min TTL)
+        if (room.files && room.files.size > 0) {
+            for (const [fileId, file] of room.files.entries()) {
+                if (now - file.uploadedAt > THIRTY_MINUTES) {
+                    file.buffer = null; // Explicitly drop buffer memory
+                    room.files.delete(fileId);
+                }
+            }
+        }
+
+        // 2. Purge stale rooms
+        if (now - room.lastAccessed > TWENTY_FOUR_HOURS && (!room.files || room.files.size === 0)) {
             sharedRooms.delete(roomId);
         }
     }
-}, 60 * 60 * 1000);
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 const ROOM_SECRET_SALT = 'yt-sync-room-enc-key-v1';
 
@@ -209,41 +243,148 @@ function resolveRoomId(input) {
     return String(target).trim().toLowerCase().slice(0, 32).replace(/[^a-z0-9_-]/g, '') || 'default';
 }
 
-// Get Room Content
+function getRoomFilesList(room) {
+    if (!room || !room.files) return [];
+    const now = Date.now();
+    const filesList = [];
+    for (const [fileId, file] of room.files.entries()) {
+        // Exclude expired
+        if (now - file.uploadedAt > 30 * 60 * 1000) {
+            room.files.delete(fileId);
+            continue;
+        }
+        filesList.push({
+            id: file.id,
+            name: file.originalName,
+            size: file.size,
+            mimeType: file.mimeType,
+            uploadedAt: file.uploadedAt,
+            expiresAt: file.uploadedAt + (30 * 60 * 1000)
+        });
+    }
+    return filesList;
+}
+
+// Get Room Content & Files
 app.get('/api/rooms/:roomId', (req, res) => {
     const roomId = resolveRoomId(req.params.roomId);
     const room = sharedRooms.get(roomId);
     if (!room) {
-        return res.json({ success: true, content: '', updatedAt: null });
+        return res.json({ success: true, content: '', updatedAt: null, files: [] });
     }
     room.lastAccessed = Date.now();
-    res.json({ success: true, content: room.content, updatedAt: room.updatedAt });
+    res.json({
+        success: true,
+        content: room.content,
+        updatedAt: room.updatedAt,
+        files: getRoomFilesList(room)
+    });
 });
 
-// Update Room Content
+// Update Room Text Content
 app.post('/api/rooms/:roomId', (req, res) => {
     const roomId = resolveRoomId(req.params.roomId);
     const content = typeof req.body.content === 'string' ? req.body.content : '';
     const now = Date.now();
 
-    sharedRooms.set(roomId, {
-        content,
-        updatedAt: now,
-        lastAccessed: now
-    });
+    const room = getOrCreateRoom(roomId);
+    room.content = content;
+    room.updatedAt = now;
+    room.lastAccessed = now;
 
     res.json({ success: true, updatedAt: now });
 });
 
-// Clear Room Content
+// Clear Room Content (Text & Files)
 app.delete('/api/rooms/:roomId', (req, res) => {
     const roomId = resolveRoomId(req.params.roomId);
     if (sharedRooms.has(roomId)) {
-        sharedRooms.set(roomId, {
-            content: '',
-            updatedAt: Date.now(),
-            lastAccessed: Date.now()
-        });
+        const room = sharedRooms.get(roomId);
+        room.content = '';
+        room.updatedAt = Date.now();
+        room.lastAccessed = Date.now();
+        if (room.files) {
+            for (const file of room.files.values()) {
+                file.buffer = null; // Explicitly clear buffer from RAM
+            }
+            room.files.clear();
+        }
+    }
+    res.json({ success: true });
+});
+
+// Upload File to Room (In-Memory, 30-min TTL)
+app.post('/api/rooms/:roomId/files', upload.single('file'), (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const room = getOrCreateRoom(roomId);
+    const fileId = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+    const now = Date.now();
+
+    const fileObj = {
+        id: fileId,
+        originalName: req.file.originalname || 'file',
+        mimeType: req.file.mimetype || 'application/octet-stream',
+        size: req.file.size,
+        buffer: req.file.buffer,
+        uploadedAt: now
+    };
+
+    room.files.set(fileId, fileObj);
+    room.lastAccessed = now;
+
+    res.json({
+        success: true,
+        file: {
+            id: fileObj.id,
+            name: fileObj.originalName,
+            size: fileObj.size,
+            mimeType: fileObj.mimeType,
+            uploadedAt: fileObj.uploadedAt,
+            expiresAt: fileObj.uploadedAt + (30 * 60 * 1000)
+        }
+    });
+});
+
+// Get Room Files List
+app.get('/api/rooms/:roomId/files', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    const room = sharedRooms.get(roomId);
+    res.json({ success: true, files: getRoomFilesList(room) });
+});
+
+// Download File from Room
+app.get('/api/rooms/:roomId/files/:fileId', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    const room = sharedRooms.get(roomId);
+    if (!room || !room.files || !room.files.has(req.params.fileId)) {
+        return res.status(404).send('File not found or expired (30m limit)');
+    }
+
+    const file = room.files.get(req.params.fileId);
+    if (Date.now() - file.uploadedAt > 30 * 60 * 1000) {
+        room.files.delete(req.params.fileId);
+        return res.status(404).send('File has expired');
+    }
+
+    room.lastAccessed = Date.now();
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);
+    res.setHeader('Content-Length', file.size);
+    res.send(file.buffer);
+});
+
+// Delete Specific File from Room
+app.delete('/api/rooms/:roomId/files/:fileId', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    const room = sharedRooms.get(roomId);
+    if (room && room.files && room.files.has(req.params.fileId)) {
+        const file = room.files.get(req.params.fileId);
+        file.buffer = null; // Explicitly drop buffer memory
+        room.files.delete(req.params.fileId);
     }
     res.json({ success: true });
 });
