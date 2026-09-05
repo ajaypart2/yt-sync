@@ -18,19 +18,12 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://akhambhayta:512001@yt-s
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB error:', err));
 
-// --- 1. NEW SCHEMAS ---
+// --- 1. SCHEMAS ---
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true }
 });
 const User = mongoose.model('User', userSchema);
-
-const noteSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    content: { type: String, default: '' },
-    updatedAt: { type: Date, default: Date.now }
-});
-const Note = mongoose.model('Note', noteSchema);
 
 const YtWatchHistorySchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -77,7 +70,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- 3. JWT AUTH MIDDLEWARE ---
-app.use(['/api/progress', '/api/note'], (req, res, next) => {
+app.use('/api/progress', (req, res, next) => {
     if (req.method === 'OPTIONS') return next();
     
     const token = req.headers['authorization'];
@@ -170,37 +163,107 @@ app.delete('/api/progress/:videoId', async (req, res) => {
     }
 });
 
-// Shared note for the logged-in user
-app.get('/api/note', async (req, res) => {
-    try {
-        const note = await Note.findOne({ userId: req.user.userId });
-        res.json({ success: true, data: note ? { content: note.content, updatedAt: note.updatedAt } : null });
-    } catch (err) {
-        res.status(500).json({ error: 'Database error' });
+// --- 5. IN-MEMORY ROOM STORE (NO DATABASE) ---
+// Key: roomId -> { content: string, updatedAt: number, lastAccessed: number }
+const sharedRooms = new Map();
+
+// Periodic cleanup: delete rooms inactive for more than 24 hours
+setInterval(() => {
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    for (const [roomId, room] of sharedRooms.entries()) {
+        if (now - room.lastAccessed > TWENTY_FOUR_HOURS) {
+            sharedRooms.delete(roomId);
+        }
     }
+}, 60 * 60 * 1000);
+
+const ROOM_SECRET_SALT = 'yt-sync-room-enc-key-v1';
+
+function decryptRoom(token) {
+    if (!token || typeof token !== 'string') return '';
+    try {
+        const buf = Buffer.from(token, 'base64url');
+        if (buf.length < 5) return '';
+        const saltBytes = [buf[0], buf[1], buf[2], buf[3]];
+        const encBytes = buf.subarray(4);
+        const decBytes = [];
+        for (let i = 0; i < encBytes.length; i++) {
+            const k = ROOM_SECRET_SALT.charCodeAt(i % ROOM_SECRET_SALT.length) ^ saltBytes[i % 4] ^ ((i * 37) & 0xFF);
+            decBytes.push(encBytes[i] ^ k);
+        }
+        const check = decBytes.pop();
+        let calcCheck = 0x5A;
+        for (let b of decBytes) calcCheck ^= b;
+        if (check !== calcCheck) return '';
+        return Buffer.from(decBytes).toString('utf8');
+    } catch (e) {
+        return '';
+    }
+}
+
+function resolveRoomId(input) {
+    if (!input) return 'default';
+    const decrypted = decryptRoom(input);
+    const target = decrypted || input;
+    return String(target).trim().toLowerCase().slice(0, 32).replace(/[^a-z0-9_-]/g, '') || 'default';
+}
+
+// Get Room Content
+app.get('/api/rooms/:roomId', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    const room = sharedRooms.get(roomId);
+    if (!room) {
+        return res.json({ success: true, content: '', updatedAt: null });
+    }
+    room.lastAccessed = Date.now();
+    res.json({ success: true, content: room.content, updatedAt: room.updatedAt });
 });
 
-app.post('/api/note', async (req, res) => {
-    const { content } = req.body;
-    try {
-        await Note.findOneAndUpdate(
-            { userId: req.user.userId },
-            { content: content || '', updatedAt: new Date() },
-            { upsert: true, new: true }
-        );
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: 'Database error' });
-    }
+// Update Room Content
+app.post('/api/rooms/:roomId', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    const content = typeof req.body.content === 'string' ? req.body.content : '';
+    const now = Date.now();
+
+    sharedRooms.set(roomId, {
+        content,
+        updatedAt: now,
+        lastAccessed: now
+    });
+
+    res.json({ success: true, updatedAt: now });
 });
 
-app.delete('/api/note', async (req, res) => {
-    try {
-        await Note.deleteOne({ userId: req.user.userId });
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: 'Database error' });
+// Clear Room Content
+app.delete('/api/rooms/:roomId', (req, res) => {
+    const roomId = resolveRoomId(req.params.roomId);
+    if (sharedRooms.has(roomId)) {
+        sharedRooms.set(roomId, {
+            content: '',
+            updatedAt: Date.now(),
+            lastAccessed: Date.now()
+        });
     }
+    res.json({ success: true });
+});
+
+// Backwards-compatible /api/note (stored in-memory, no DB)
+app.get('/api/note', (req, res) => {
+    const room = sharedRooms.get('default') || { content: '', updatedAt: null };
+    res.json({ success: true, data: { content: room.content, updatedAt: room.updatedAt } });
+});
+
+app.post('/api/note', (req, res) => {
+    const content = typeof req.body.content === 'string' ? req.body.content : '';
+    const now = Date.now();
+    sharedRooms.set('default', { content, updatedAt: now, lastAccessed: now });
+    res.json({ success: true });
+});
+
+app.delete('/api/note', (req, res) => {
+    sharedRooms.set('default', { content: '', updatedAt: Date.now(), lastAccessed: Date.now() });
+    res.json({ success: true });
 });
 
 // Download the extension from GitHub
@@ -222,11 +285,7 @@ app.get('/api/download-extension', (req, res) => {
     });
 });
 
-app.get('/note', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'note.html'));
-});
-
-app.get('/note/', (req, res) => {
+app.get(['/note', '/note/:roomId'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'note.html'));
 });
 
